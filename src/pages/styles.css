@@ -1,0 +1,11 @@
+@font-face {
+	font-family: 'AlimamaShuHeiTi';
+	src: url('/fonts/阿里妈妈数黑体.ttf');
+	font-weight: normal;
+	font-style: normal;
+}
+
+.left-background {
+	background-color: rgba(224, 235, 224, 0.9);
+	/* #E0EBE0 透明度 90% */
+}
