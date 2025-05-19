@@ -1,518 +1,372 @@
-import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Layout, Menu, Space, Divider,Button } from 'antd';
-import { AudioOutlined,PictureOutlined,SwapOutlined,FullscreenOutlined,LeftSquareTwoTone,PlusOutlined,CustomerServiceFilled,ShrinkOutlined , UserOutlined,CloseOutlined ,StarFilled} from '@ant-design/icons';
-import type { MenuProps  } from 'antd';
-// import Button from "@/components/ui/button";
-import { Input, Avatar } from 'antd';
-import { SendOutlined } from '@ant-design/icons';
-import { Modal } from 'antd';
-import { useLocalStorage, } from '../hooks/useLocalStorage';
+import React, {
+  useRef,
+  useEffect,
+  forwardRef,
+  useImperativeHandle,
+  useState
+} from 'react';
+import {
+  Layout,
+  Menu,
+  Space,
+  Divider,
+  Button,
+  Modal,
+  Input,
+  Avatar
+} from 'antd';
+import {
+  PlusOutlined,
+  CustomerServiceFilled,
+  UserOutlined,
+  ShrinkOutlined,
+  CloseOutlined,
+  StarFilled,
+  SendOutlined
+} from '@ant-design/icons';
+import type { MenuProps } from 'antd';
 import { PageType } from '../types';
-
-const { Footer } = Layout;
 
 const { Header, Sider, Content } = Layout;
 
-const CanvasArea = () => {
-  return (
-    <div style={{
-      background: `
-        linear-gradient(90deg, #f0f0f0 1px, transparent 1px),
-        linear-gradient(#f0f0f0 1px, transparent 1px),
-        #fff`,
-      backgroundSize: '20px 20px',
-      height: '600px',
-      borderRadius: 8,
-      position: 'relative',
-      boxShadow: '0 2px 12px rgba(0,0,0,0.08)'
-    }}>
+// 画布组件
+const CanvasArea: React.FC<{ imageSrc?: string }> = ({ imageSrc }) => (
+  <div style={{
+    background: `
+      linear-gradient(90deg, #f0f0f0 1px, transparent 1px),
+      linear-gradient(#f0f0f0 1px, transparent 1px),
+      #fff`,
+    backgroundSize: '20px 20px',
+    height: '100%',
+    position: 'relative',
+    borderRadius: 8,
+    boxShadow: '0 2px 12px rgba(0,0,0,0.08)'
+  }}>
+    {imageSrc ? (
+      <img
+        src={imageSrc}
+        alt="canvas"
+        style={{
+          position: 'absolute', top: 0, left: 0,
+          width: '100%', height: '100%',
+          objectFit: 'contain', borderRadius: 8
+        }}
+      />
+    ) : (
       <div style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
+        position: 'absolute', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
-        color: 'rgba(0,0,0,0.25)',
-        fontSize: 20,
-        userSelect: 'none'
+        color: 'rgba(0,0,0,0.25)', fontSize: 20
       }}>
+        点击聊天中的图片在此预览
+      </div>
+    )}
+  </div>
+);
+
+// 单条消息组件
+interface ChatMessageProps {
+  isAI: boolean;
+  text: string;
+  img?: string;
+  jumpText?: string;
+  modalImg?: string;
+  onImageClick: (src: string) => void;
+  onButtonClick: (src: string) => void;
+}
+const ChatMessage: React.FC<ChatMessageProps> = ({
+  isAI, text, img, jumpText, modalImg, onImageClick, onButtonClick
+}) => (
+  <div style={{
+    display: 'flex',
+    justifyContent: isAI ? 'flex-start' : 'flex-end',
+    padding: '8px 0'
+  }}>
+    <div style={{
+      display: 'flex',
+      flexDirection: isAI ? 'row' : 'row-reverse',
+      alignItems: 'flex-start',
+      gap: 8,
+      maxWidth: '80%'
+    }}>
+      <Avatar
+        src={isAI ? '/images/avatar.png' : undefined}
+        icon={!isAI ? <UserOutlined /> : undefined}
+        style={{ backgroundColor: isAI ? '#f0f0f0' : '#1890ff' }}
+      />
+      <div style={{
+        backgroundColor: isAI ? '#f0f0f0' : '#1890ff',
+        color: isAI ? '#000' : '#fff',
+        padding: '8px 12px',
+        borderRadius: 8,
+        boxShadow: '0 1px 4px rgba(0,0,0,0.1)'
+      }}>
+        <div>{text}</div>
+        {img && (
+          <img
+            src={img}
+            alt="chat"
+            onClick={() => onImageClick(img)}
+            style={{ maxWidth: 200, cursor: 'pointer', marginTop: 8, borderRadius: 4 }}
+          />
+        )}
+        {jumpText && modalImg && (
+          <Button
+            size="small"
+            onClick={() => onButtonClick(modalImg)}
+            style={{ marginTop: 8 }}
+          >{jumpText}</Button>
+        )}
       </div>
     </div>
-  );
-};
+  </div>
+);
 
-
-interface AnalysisPageProps {
-	setCurrentPage: React.Dispatch<React.SetStateAction<PageType>>;
+// 聊天界面
+interface ChatInterfaceHandle { resetMessage: () => void; }
+interface ChatInterfaceProps {
+  onImageClick: (src: string) => void;
+  onOpenModal: (src: string) => void;
 }
-const AIGenerate: React.FC<AnalysisPageProps> = ({setCurrentPage}) => {
-  const topMenuItems: MenuProps['items'] = [
-  ];
+const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>(
+  ({ onImageClick, onOpenModal }, ref) => {
+    // **改用 useState**
+    const [messages, setMessages] = useState<any[]>([]);
+    const [aiIndex, setAiIndex] = useState(0);
+    const [inputValue, setInputValue] = useState('');
+    const endRef = useRef<HTMLDivElement>(null);
 
-  const chatInterfaceRef = useRef<HTMLDivElement>(null);
-  const messageStoreKey = 'AIGeneratechatMessages';
-
-  const sideMenuItems: MenuProps['items'] = [
-    { key: '2', label: '页面2' },
-    { key: '3', label: '页面1' },
-    { key: '4', label: '翌界论坛' },
-    { key: '5', label: '翌界首页' },
-  ];
-
-  const handleResetMessage = () => {
-    if(chatInterfaceRef.current) {
-      chatInterfaceRef.current.resetMessage();
-    }
-  };
-
-  const ChatMessage = ({ isAI, text, img,jumpPath,jumpText }: { isAI?: boolean; text: string; img?: string,jumpPath?: string,jumpText?: string }) => {
-
-    const handleJump = (path: any) => {
-      console.log(path,'path');
-      
-      setTimeout(() => {
-          setCurrentPage(path); // 0.5秒后跳转到 垃圾界面1
-      }, 500);
-  };
-    
-    return (
-      <div style={{
-        display: 'flex',
-        flexDirection: isAI ? 'row' : 'row-reverse',
-        margin: '16px 0',
-        gap: 12
-      }}>
-        <Avatar 
-          src={isAI ? "avatar.png" : <UserOutlined />}
-          style={{ 
-            backgroundColor: isAI ? '#1890ff' : '#1890ff',
-            width: 40,
-            height: 40
-          }}
-        />
-        <div style={{
-          backgroundColor: isAI ? '#f0faff' : '#e6f7ff',
-          padding: 12,
-          borderRadius: 8,
-          maxWidth: '70%',
-          border: '1px solid #e6f7ff',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-        }}>
-          {text}
-          {img && <img src={img}  />}
-          {jumpPath && <Button onClick={() => handleJump(jumpPath)} className="mt-0 ml-3 text-sm px-2 py-1" >{jumpText}</Button>}
-        </div>
-      </div>
-    )
-  };
-  
-  const ChatInterface = forwardRef((props, ref) => {
-    const [isModalOpen, setIsModalOpen] = React.useState(false);
-    const [messages, setMessages] = useLocalStorage<Array<any>>(messageStoreKey, []);
-    const defaultMessages = [
-      { text: '你好，我是翌界AI助手，请告诉我你想要的界面设计风格，我会为你生成完美的用户界面。', isAI: true, img: "" ,default: true},
-      { text: '我想生成一个智能家居界面', isAI: false, img: "",default: true },
-      { text: '好的！ 您希望这个界面包含哪些功能呢？', isAI: true, img: "",default: true },
-    ];
-    const [inputValue, setInputValue] = React.useState('');
-    const [aiResponseIndex, setAiResponseIndex] = useLocalStorage<number>('aiResponseIndex', 0);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-
-    const aiResponses = [
- 
-      {
-        text:"好的，我将为您生成智能家具界面。根据您的需求，智能家居界面要包含常用设备开关与数据监测统计功能。请问您家中一共有哪些智能家具设备呢？",
-        img: "", 
-        jumpPath:"",
-      },
-      {
-        text:"好的。正在为您生成智能家居界面",
-        jumpPath: "garbage1",  
-        jumpText:"跳转到 智能家居界面",
-      },
-      {
-        text:"好的！我将为您在主页轮播家中智能摄像头的实时画面，并对整个房间的耗电量进行实时监控，实现对家庭设备的实时检测与控制。",
-        jumpPath: "garbage2",  
-        jumpText:"跳转到 改进智能家居界面",
-      },
-      {
-        text:"好的，我将为您生成设备界面，可以对所有的设备进行便捷操作。",
-        jumpPath: "garbage3",  
-        jumpText:"跳转到 设备界面",
-      },
-      {
-        text:"好的，我将结合大数据，为您生成智能分析界面（生成智能分析界面），同时，您还可以在主页右上方点击输入指令，我会对您的要求进行智能回答。",
-        jumpPath: "analysis",  
-        jumpText:"跳转到 智能分析界面",
-      },
+    const defaultMsgs = [
+      { text: '你好，我是翌界AI助手，请告诉我想要的界面风格。', isAI: true },
+      { text: '我想生成一个智能家居界面', isAI: false },
+      { text: '好的！您希望界面包含哪些功能？', isAI: true }
     ];
 
-
-  // **检查默认消息是否存在**
-  const checkAndAddDefaultMessages = (oldMessage:any) => {
- let oldMsg = JSON.parse(oldMessage);
-
-    const existingDefaultMessages = oldMsg.filter((msg:any) => msg.default);
-    if(existingDefaultMessages.length > 0) {
-      setMessages(oldMsg);
-      return;
-    }
-    setMessages([...defaultMessages, ...oldMsg]);  // 如果没有默认消息，则添加默认消息
-  };
-
-  // **首次加载时校验消息**，如果没有消息则填充默认消息
-  useEffect(() => {
-    let  oldMessage = localStorage.getItem(messageStoreKey);
-    console.log(oldMessage,'oldMessage');
-    if (!oldMessage) {
-      setMessages(defaultMessages);  // 没有任何历史消息则直接添加默认消息
-    } else {
-      checkAndAddDefaultMessages(oldMessage);  // 有历史消息则检查是否缺少默认消息
-    }
-  }, []);  // 只在组件首次加载时执行
-
-    //  自动滚动
-    const scrollToBottom = () => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
-    const resetMessage = () => {
-      // 重置消息到初始状态
-      setMessages([ ]);
-      setAiResponseIndex(0);
-    };
-
-    useImperativeHandle(ref, () => ({
-      resetMessage,
-    }));
-
+    // 初始化默认消息
     useEffect(() => {
-      scrollToBottom();
+      if (messages.length === 0) {
+        setMessages(defaultMsgs);
+      }
+    }, []);
+
+    // 滚动到底部
+    useEffect(() => {
+      endRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    const showModal = () => {
-      setIsModalOpen(true);
-    };
+    // 暴露 resetMessage
+    useImperativeHandle(ref, () => ({
+      resetMessage() {
+        setMessages([]);
+        setAiIndex(0);
+      }
+    }));
 
-    const handleCancel = () => {
-      setIsModalOpen(false);
-    };
+    // AI 回复列表
+    const aiResponses = [
+      {
+    text: '正在为您生成智能家居界面…',
+    img: '/images/01.png',
+    jumpText: '跳转到 智能家居界面',
+    modalImg: '/images/01.png'
+  },
+      {
+        text: '这是改进的界面效果',
+        img: '/images/02.png',
+        jumpText: '跳转到 改进智能家居界面',
+        modalImg: '/images/02.png'
+      },
+      {
+        text: '设备管理界面如图',
+        img: '/images/03.png',
+        jumpText: '跳转到 设备界面',
+        modalImg: '/images/03.png'
+      },
+      {
+        text: '智能分析界面预览',
+        img: '/images/04.png',
+        jumpText: '跳转到 智能分析界面',
+        modalImg: '/images/04.png'
+      }
+    ];
 
     const handleSend = () => {
-      if (!inputValue.trim()) return;
-
-      // 添加用户消息
-      const newMessages = [...messages, { text: inputValue, isAI: false, img: "" }];
-      setMessages(newMessages);
-      setInputValue("");
-
-      // 添加AI回复
+      const val = inputValue.trim();
+      if (!val) return;
+      const userMsg = { text: val, isAI: false };
+      setInputValue('');
+      // 立即添加用户消息
+      setMessages(prev => [...prev, userMsg]);
+      // 延迟添加 AI 回复
       setTimeout(() => {
-        const aiResponse = aiResponses[aiResponseIndex];
-        setMessages([...newMessages, {...aiResponse, isAI: true}]);
-        setAiResponseIndex((prevIndex) => (prevIndex + 1) % aiResponses.length);
+        setMessages(prev => {
+          const ai = aiResponses[aiIndex % aiResponses.length];
+          setAiIndex(i => i + 1);
+          return [...prev, { ...ai, isAI: true }];
+        });
       }, 500);
     };
 
-
-
-
-
     return (
-      <Layout style={{
-        height: 'calc(100vh - 112px)',
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#fff',
-        borderRadius: 8,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
-      }}>
-        <Content style={{
-          flex: 1,
-          padding: 24,
-          overflowY: 'auto',
-          background: '#fafafa'
-        }}>
-          {messages.map((msg, index) => (
-            <ChatMessage key={index} isAI={msg.isAI} text={msg.text} img={msg.img} jumpPath={msg.jumpPath} jumpText={msg.jumpText} />
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* 消息区 */}
+        <div
+          style={{
+            flex: 1,
+            padding: 16,
+            overflowY: 'auto',
+            background: '#fafafa'
+          }}
+        >
+          {messages.map((m, i) => (
+            <ChatMessage
+              key={i}
+              text={m.text}
+              isAI={m.isAI}
+              img={m.img}
+              jumpText={m.jumpText}
+              modalImg={m.modalImg}
+              onImageClick={onImageClick}
+              onButtonClick={onOpenModal}
+            />
           ))}
-          <div ref={messagesEndRef} />
-        </Content>
-  
-        <Footer style={{
-          padding: 16,
-          borderTop: '1px solid #f0f0f0',
-          background: '#fff'
-        }}>
+          <div ref={endRef} />
+        </div>
+        {/* 输入区 */}
+        <div
+          style={{
+            padding: 8,
+            borderTop: '1px solid #e8e8e8',
+            background: '#fff'
+          }}
+        >
           <div style={{ display: 'flex', gap: 8 }}>
             <Input.TextArea
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder="输入消息..."
+              onChange={e => setInputValue(e.target.value)}
               autoSize={{ minRows: 1, maxRows: 4 }}
-              style={{ borderRadius: 20 }}
-              onPressEnter={(e) => {
+              placeholder="输入消息..."
+              style={{ flex: 1, borderRadius: 20 }}
+              onPressEnter={e => {
                 if (!e.shiftKey) {
                   e.preventDefault();
                   handleSend();
                 }
               }}
-            />&nbsp;&nbsp;
-            <Button 
-              type="default" 
-              icon={<AudioOutlined style={{color:'white'}} />}
-              onClick={showModal}
-              style={{ 
-                width: 32,
-                height: 32,
-                borderRadius: 4,
-                border: '1px solid #d9d9d9',
-                backgroundColor: '#1890ff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
             />
-            
-            <Modal
-              title=""
-              visible={isModalOpen}
-              onCancel={handleCancel}
-              footer={null}
-              centered
-              width={800}
-            >
-              <div style={{ 
-                textAlign: 'center',
-                padding: '40px 0',
-                position: 'relative'
-              }}>
-                                <img 
-                  src="" 
-                  style={{
-                    width: 600,
-                    height: 200,
-                    margin: '0 auto',
-                    display: 'block',
-                    marginTop: 40
-                  }}
-                />
-
-              </div>
-            </Modal>
-            &nbsp;<Button 
-              type="default" 
-              icon={<PictureOutlined style={{color:'white'}} />}
-              style={{ 
-                width: 32,
-                height: 32,
-                borderRadius: 4,
-                border: '1px solid #d9d9d9',
-                backgroundColor: '#1890ff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            />&nbsp;&nbsp;
-            <Button 
-            onClick={handleSend}
-              type="primary" 
-              shape="circle" 
-              icon={<SendOutlined />}
-              style={{ 
-                backgroundColor: '#1890ff',
-                borderColor: '#1890ff'
-              }}
-            />
+            <Button type="primary" icon={<SendOutlined />} onClick={handleSend} />
           </div>
-        </Footer>
-      </Layout>
+        </div>
+      </div>
     );
-  });
+  }
+);
+
+// 主页面
+interface AIGenerateProps {
+  setCurrentPage: React.Dispatch<React.SetStateAction<PageType>>;
+}
+const AIGenerate: React.FC<AIGenerateProps> = ({ setCurrentPage }) => {
+  const [canvasImg, setCanvasImg] = useState<string>();
+  const [modalImg, setModalImg] = useState<string>();
+  const chatRef = useRef<any>(null);
+
+  const sideMenuItems: MenuProps['items'] = [
+    { key: '2', label: '页面2' },
+    { key: '3', label: '页面1' },
+    { key: '4', label: '翌界论坛' },
+    { key: '5', label: '翌界首页' }
+  ];
 
   return (
-    <Layout style={{ minHeight: '100vh', background: '#f5f5f5' }}>
+    <Layout style={{ height: '100vh', background: '#f5f5f5' }}>
+      {/* 全屏 Modal */}
+      <Modal
+        open={!!modalImg}
+        footer={null}
+        onCancel={() => setModalImg(undefined)}
+        width="100%"
+        style={{ top: 0 }}
+        bodyStyle={{ padding: 0, height: '100vh', background: '#000' }}
+      >
+        <img
+          src={modalImg!}
+          alt="full"
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+        />
+
+      </Modal>
+
+      {/* Header */}
       <Header
         style={{
           background: '#fff',
+          display: 'flex',
+          alignItems: 'center',
           padding: '0 24px',
-          height: 64,   
-          position: 'sticky',
-          top: 10 ,
-          zIndex: 100,
-          borderRadius: 8,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-          margin: '16px 16px 0',
-          width: 'calc(100% - 32px)'
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
-        <div style={{ 
-            fontSize: 18, 
-            fontWeight: 600, 
-            marginRight: 40,
-            display: 'flex',
-            alignItems: 'center',
-
-            flex: 1  
-          }}>
-            <img src="logo.png" style={{ height: 30, marginRight: 8 }} />
-            AI 生成界面
-          </div>
-          
-          <Menu
-            mode="horizontal"
-            items={topMenuItems}
-            style={{ flex: 1, borderBottom: 'none' }}
+        <img
+          src="/images/logo.png"
+          alt="logo"
+          style={{ height: 30, marginRight: 12 }}
+        />{' '}
+        AI 生成界面
+        <Space style={{ marginLeft: 'auto' }}>
+          <StarFilled
+            onClick={() => chatRef.current?.resetMessage()}
+            style={{ cursor: 'pointer' }}
           />
-
-          <Space>
-            <StarFilled onClick={handleResetMessage} style={{ fontSize: 16, cursor: 'pointer' }} />
-            <Divider type="vertical" />
-            <CustomerServiceFilled style={{ fontSize: 16, cursor: 'pointer' }} />
-            <Divider type="vertical" />
-            <UserOutlined style={{ fontSize: 16, cursor: 'pointer' }} />
-            <Divider type="vertical" />
-            <ShrinkOutlined style={{ fontSize: 16, cursor: 'pointer' }} />
-            <Divider type="vertical" />
-            <CloseOutlined style={{ fontSize: 16, cursor: 'pointer' }} />
-          </Space>
-        </div>
+          <Divider type="vertical" />
+          <CustomerServiceFilled />
+          <Divider type="vertical" />
+          <UserOutlined />
+          <Divider type="vertical" />
+          <ShrinkOutlined />
+          <Divider type="vertical" />
+          <CloseOutlined />
+        </Space>
       </Header>
 
-      {/* 主内容区域 */}
-      <Layout style={{ margin: '16px', gap: 16 }}>
-        {/* 左侧导航栏 - 卡片样式 */}
+      <Layout>
+        {/* 最左侧导航 */}
         <Sider
-          theme="light"
           width={240}
           style={{
             background: '#fff',
-            borderRadius: 8,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-            height: 'calc(100vh - 112px)',
-            position: 'sticky',
-            top: 80,
-            overflow: 'auto'
+            padding: 16,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
           }}
         >
-         <div style={{ 
-            padding: '16px 24px',
-            fontSize: 16,
-            fontWeight: 500,
-            border: '2px solid #d9d9d9',
-            borderRadius: 8,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 16px 8px',
-            background: '#fff',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.1)'
-          }}>
-            <PlusOutlined style={{ fontSize: 14 }} />
-            <span style={{ marginLeft: 8 }}>新页面</span>
-          </div>
-          <Menu
-            mode="inline"
-            defaultSelectedKeys={['4']}
-            items={sideMenuItems}
-            style={{ borderRight: 0, padding: '0 16px' }}
-          />
+          <Button icon={<PlusOutlined />} block style={{ marginBottom: 16 }}>
+            新页面
+          </Button>
+          <Menu mode="inline" items={sideMenuItems} />
         </Sider>
 
-        {/* 中间内容区域 - 卡片样式 */}
-<Content
-  style={{
-    background: '#fff',
-    borderRadius: 8,
-    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-    minHeight: 'calc(100vh - 112px)',
-    display: 'flex',
-    flexDirection: 'column'
-  }}
->
-  <div style={{ flex: 1, padding: 24 }}>
-    <CanvasArea />
-  </div>
+        {/* 中间画布 */}
+        <Content style={{ padding: 16 }}>
+          <CanvasArea imageSrc={canvasImg} />
+        </Content>
 
-  <div style={{
-    borderTop: '1px solid #f0f0f0',
-    padding: '12px 24px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    background: '#fff'
-  }}>
-    <Space>
-      <Button 
-        icon={<LeftSquareTwoTone />} 
-        type="text"
-        style={{ padding: '4px 8px' }}
-      />
-      <Button
-        style={{
-            fontSize: 16,
-          background: '#f0f5ff',
-          border: 'none',
-          borderRadius: '4px',
-          padding: '4px 12px',
-          color: '#1890ff'
-        }}
-      >
-        V8
-      </Button>
-  
-    </Space>
-    
-    <Space>
-    <FullscreenOutlined  style={{
-          background: '#f0f5ff',
-          border: 'none',
-          borderRadius: '4px',
-          padding: '4px 12px',
-        }} />
-      <Button
-        type="primary"
-        style={{
-          background: '#1677ff',
-          borderRadius: '4px'
-        }}
-      >
-        插入到画布
-      </Button>
-      &nbsp;&nbsp;
-      <Button
-        type="default"
-        style={{
-          background: '#ffffff',
-          borderRadius: '4px',
-          border: '2px solid #d9d9d9',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}
-      >
-        <div  
-        style={{
-          borderRadius: '4px',
-          color: '#000000'
-        }}>
-        React - Shadcn &nbsp;&nbsp;
-        <SwapOutlined />
-        </div>
-      </Button>
-      <Button 
-        icon={<span>{"</>"}</span>} 
-        type="text"
-        style={{ 
-          background: '#f5f5f5',
-          borderRadius: '4px',
-          marginLeft: '8px'
-        }}
-      />
-    </Space>
-  </div>
-</Content>
-
-        {/* 右侧侧边栏 - 卡片样式 */}
-        <ChatInterface ref={chatInterfaceRef} />
+        {/* 最右侧聊天 */}
+        <Sider
+          width={400}
+          style={{
+            background: '#fff',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
+          }}
+        >
+          <ChatInterface
+            ref={chatRef}
+            onImageClick={setCanvasImg}
+            onOpenModal={setModalImg}
+          />
+        </Sider>
       </Layout>
     </Layout>
   );
